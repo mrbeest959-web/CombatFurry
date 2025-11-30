@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserState, UpgradeItem, SkinItem, Tab, LeaderboardUser } from '../types';
 import { UPGRADES, SKINS, LEVEL_THRESHOLDS, INITIAL_LEADERBOARD_BOTS } from '../constants';
+import { Loader2 } from 'lucide-react';
 
 const INITIAL_STATE: UserState = {
   username: '',
@@ -13,7 +14,8 @@ const INITIAL_STATE: UserState = {
   level: 1,
   purchasedUpgrades: {},
   unlockedSkins: ['furcoin'],
-  activeSkin: 'furcoin'
+  activeSkin: 'furcoin',
+  walletConnected: false
 };
 
 interface GameContextType {
@@ -27,6 +29,7 @@ interface GameContextType {
   buySkin: (skin: SkinItem) => boolean;
   equipSkin: (skinId: string) => void;
   calculateUpgradeCost: (basePrice: number, level: number) => number;
+  connectWallet: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -38,45 +41,68 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // Load from local storage
+  // Load from local storage with Error Handling
   useEffect(() => {
-    const saved = localStorage.getItem('furry_combat_save');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        
-        // Calculate offline earnings
-        const now = Date.now();
-        const secondsPassed = (now - parsed.lastLogin) / 1000;
-        const offlineEarnings = Math.floor((parsed.profitPerHour / 3600) * secondsPassed);
-        
-        // Energy Recovery
-        const energyRecovery = Math.floor(secondsPassed * 4);
-        const newEnergy = Math.min(parsed.maxEnergy, parsed.energy + energyRecovery);
+    const initGame = async () => {
+        try {
+            // Load User
+            const saved = localStorage.getItem('furry_combat_save');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                
+                // Calculate offline earnings
+                const now = Date.now();
+                const secondsPassed = (now - parsed.lastLogin) / 1000;
+                const offlineEarnings = Math.floor((parsed.profitPerHour / 3600) * secondsPassed);
+                
+                // Energy Recovery
+                const energyRecovery = Math.floor(secondsPassed * 4);
+                const newEnergy = Math.min(parsed.maxEnergy, parsed.energy + energyRecovery);
 
-        setState({
-          ...parsed,
-          balance: parsed.balance + offlineEarnings,
-          energy: newEnergy,
-          lastLogin: now
-        });
-      } catch (e) {
-        console.error("Save file corrupted", e);
-      }
-    }
-    setLoaded(true);
+                setState({
+                ...parsed,
+                balance: parsed.balance + offlineEarnings,
+                energy: newEnergy,
+                lastLogin: now,
+                walletConnected: parsed.walletConnected || false 
+                });
+            }
+
+            // Load Leaderboard DB (Bots)
+            const savedBots = localStorage.getItem('furry_combat_bots');
+            if (savedBots) {
+                setBots(JSON.parse(savedBots));
+            }
+
+        } catch (e) {
+            console.error("Save file corrupted or storage disabled", e);
+        } finally {
+            setLoaded(true);
+        }
+    };
+    
+    initGame();
   }, []);
 
-  // Simulate Live Leaderboard (Bots gaining score)
+  // Simulate Live Leaderboard (Bots gaining score) & Persist to DB
   useEffect(() => {
     if (!loaded) return;
 
     const interval = setInterval(() => {
         setBots(prevBots => {
-            return prevBots.map(bot => ({
+            const updatedBots = prevBots.map(bot => ({
                 ...bot,
                 balance: bot.balance + Math.floor(Math.random() * 500) // Bots farm too!
             }));
+
+            // Save to "Database" (LocalStorage)
+            try {
+                localStorage.setItem('furry_combat_bots', JSON.stringify(updatedBots));
+            } catch (e) {
+                console.warn("Could not save leaderboard", e);
+            }
+            
+            return updatedBots;
         });
     }, 2000); // Updates every 2 seconds
 
@@ -106,7 +132,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLeaderboard(ranked);
   }, [state.balance, state.username, state.isOnboarded, bots]);
 
-  // Save loop & Passive Income & Energy Regen
+  // Save User State loop & Passive Income & Energy Regen
   useEffect(() => {
     if (!loaded || !state.isOnboarded) return;
 
@@ -123,7 +149,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastLogin: Date.now()
         };
         
-        localStorage.setItem('furry_combat_save', JSON.stringify(newState));
+        try {
+            localStorage.setItem('furry_combat_save', JSON.stringify(newState));
+        } catch(e) {
+            console.warn("Could not save game state", e);
+        }
         return newState;
       });
     }, 1000);
@@ -205,7 +235,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  if (!loaded) return null;
+  const connectWallet = () => {
+    setState(prev => ({ ...prev, walletConnected: true }));
+  };
+
+  // RENDER LOADING SCREEN INSTEAD OF NULL
+  if (!loaded) {
+      return (
+        <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white space-y-4">
+            <Loader2 size={48} className="animate-spin text-yellow-400" />
+            <p className="font-mono animate-pulse">Загрузка данных...</p>
+        </div>
+      );
+  }
 
   return (
     <GameContext.Provider value={{ 
@@ -217,8 +259,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       handleTap, 
       buyUpgrade, 
       calculateUpgradeCost,
-      buySkin,
-      equipSkin
+      buySkin, 
+      equipSkin,
+      connectWallet
     }}>
       {children}
     </GameContext.Provider>

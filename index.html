@@ -9,25 +9,20 @@
       body {
         background-color: #000000;
         color: #ffffff;
-        overflow: hidden; /* Prevent scroll on body, handle in app */
-        touch-action: none; /* Disable browser handling of gestures */
+        overflow: hidden;
+        touch-action: none;
         user-select: none;
         -webkit-user-select: none;
         -webkit-tap-highlight-color: transparent;
       }
-      /* Custom scrollbar for webkit */
-      ::-webkit-scrollbar {
-        width: 4px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #1c1c1e;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #444;
-        border-radius: 2px;
-      }
       
-      /* Float animation for click text */
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: #1c1c1e; }
+      ::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+      
+      /* --- ANIMATIONS --- */
+      
+      /* Float Text */
       @keyframes floatUp {
         0% { transform: translateY(0) scale(0.5); opacity: 1; }
         50% { transform: translateY(-80px) scale(1.5); opacity: 1; }
@@ -37,17 +32,55 @@
         animation: floatUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
       }
 
-      /* Coin tilt perspective */
-      .coin-container {
-        perspective: 1000px;
-        transform-style: preserve-3d;
+      /* Fade In */
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
       }
-      .coin-inner {
-        transform-style: preserve-3d;
-        transition: transform 0.05s linear; /* Faster response */
+      .animate-fade-in {
+        animation: fadeIn 0.5s ease-out forwards;
       }
+
+      /* Slide Up (Modal) */
+      @keyframes slideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      .animate-slide-up {
+        animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      /* Slide In From Bottom (Lists) */
+      @keyframes slideInBottom {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      .animate-slide-in-bottom {
+        animation: slideInBottom 0.5s ease-out forwards;
+      }
+
+      /* Zoom In */
+      @keyframes zoomIn {
+        from { transform: scale(0.9); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+      .animate-zoom-in {
+        animation: zoomIn 0.3s ease-out forwards;
+      }
+
+      /* Pulse/Bounce Utilities */
+      .animate-bounce-subtle {
+        animation: bounceSubtle 0.5s infinite;
+      }
+      @keyframes bounceSubtle {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+      }
+
+      /* Game FX */
+      .coin-container { perspective: 1000px; transform-style: preserve-3d; }
+      .coin-inner { transform-style: preserve-3d; transition: transform 0.05s linear; }
       
-      /* Particle Animations */
       @keyframes particleMove {
         0% { transform: translate(0, 0) scale(1); opacity: 1; }
         100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
@@ -58,7 +91,6 @@
         animation: particleMove 0.6s ease-out forwards;
       }
 
-      /* Shockwave effect */
       @keyframes shockwave {
         0% { transform: scale(0.5); opacity: 0.8; border-width: 4px; }
         100% { transform: scale(2); opacity: 0; border-width: 0px; }

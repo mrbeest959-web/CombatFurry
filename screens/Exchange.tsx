@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useGame } from '../contexts/GameContext';
 import { LEVEL_THRESHOLDS, SKINS } from '../constants';
@@ -11,12 +12,17 @@ const Exchange: React.FC = () => {
   const [clicks, setClicks] = useState<FloatingText[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [shockwaves, setShockwaves] = useState<{id: number, x: number, y: number}[]>([]);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  
+  // 3D Rotation States
+  const [rotation, setRotation] = useState({ x: 0, y: 0 });
+  const [isPressed, setIsPressed] = useState(false);
   
   // UI States
   const [showSkins, setShowSkins] = useState(false);
   
   const coinRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
   const currentSkin = SKINS.find(s => s.id === state.activeSkin) || SKINS[0];
   const currentLevelName = LEVEL_THRESHOLDS[Math.min(state.level - 1, LEVEL_THRESHOLDS.length - 1)].name;
   
@@ -26,6 +32,49 @@ const Exchange: React.FC = () => {
   const progressPercent = nextLevelThreshold === currentThreshold 
     ? 100 
     : Math.min(100, Math.max(0, ((state.balance - currentThreshold) / (nextLevelThreshold - currentThreshold)) * 100));
+
+  // --- 3D & INTERACTION LOGIC ---
+
+  useEffect(() => {
+    // Mouse Movement Handler (Desktop)
+    const handleMouseMove = (e: MouseEvent) => {
+        if (!containerRef.current) return;
+        
+        const { left, top, width, height } = containerRef.current.getBoundingClientRect();
+        const centerX = left + width / 2;
+        const centerY = top + height / 2;
+        
+        // Calculate distance from center normalized -1 to 1
+        const mouseX = (e.clientX - centerX) / (width / 2);
+        const mouseY = (e.clientY - centerY) / (height / 2);
+        
+        // Limit rotation to 25 degrees
+        setRotation({
+            x: -mouseY * 25,
+            y: mouseX * 25
+        });
+    };
+
+    // Device Orientation Handler (Mobile)
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+        if (!e.beta || !e.gamma) return;
+        
+        // Beta is front/back tilt (-180 to 180). We clamp to +/- 45
+        // Gamma is left/right tilt (-90 to 90). We clamp to +/- 45
+        const x = Math.min(Math.max(e.beta - 45, -25), 25); // Offset by 45deg for comfortable holding angle
+        const y = Math.min(Math.max(e.gamma, -25), 25);
+        
+        setRotation({ x: -x, y: y });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('deviceorientation', handleOrientation);
+
+    return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('deviceorientation', handleOrientation);
+    };
+  }, []);
 
   const spawnEffects = (x: number, y: number) => {
      // Floating Text
@@ -60,25 +109,23 @@ const Exchange: React.FC = () => {
 
   const handleTouch = (e: React.TouchEvent) => {
     // e.preventDefault(); // Handled by CSS touch-action: none
-    const touches = Array.from(e.changedTouches) as unknown as React.Touch[];
+    setIsPressed(true);
+    const touches = Array.from(e.changedTouches) as any[];
     
-    // We can handle multiple fingers at once
-    let tapCount = 0;
-    
-    // Calculate tilt based on the first touch for simplicity
+    // Add extra "punch" to rotation based on tap location
     if (touches.length > 0 && coinRef.current) {
         const rect = coinRef.current.getBoundingClientRect();
         const touch = touches[0];
         const x = touch.clientX - rect.left - rect.width / 2;
         const y = touch.clientY - rect.top - rect.height / 2;
-        const rotateX = -y / 8; // More sensitive
-        const rotateY = x / 8;
-        setTilt({ x: rotateX, y: rotateY });
         
-        // Reset tilt after a short delay
-        setTimeout(() => setTilt({ x: 0, y: 0 }), 100);
+        setRotation(prev => ({
+            x: prev.x - (y / 5), // Add impulse
+            y: prev.y + (x / 5)
+        }));
     }
 
+    let tapCount = 0;
     touches.forEach(touch => {
         const success = handleTap(state.level);
         if (success) {
@@ -88,23 +135,30 @@ const Exchange: React.FC = () => {
     });
 
     if (tapCount > 0 && navigator.vibrate) {
-        navigator.vibrate(tapCount * 10); // Vibrate
+        navigator.vibrate(tapCount * 15);
     }
+    
+    setTimeout(() => setIsPressed(false), 150);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+      setIsPressed(true);
       const success = handleTap(state.level);
       if (!success) return;
-
+      
+      // Add click impulse
       if (coinRef.current) {
           const rect = coinRef.current.getBoundingClientRect();
           const x = e.clientX - rect.left - rect.width / 2;
           const y = e.clientY - rect.top - rect.height / 2;
-          setTilt({ x: -y/8, y: x/8 });
-          setTimeout(() => setTilt({ x: 0, y: 0 }), 100);
+          setRotation(prev => ({
+            x: prev.x - (y / 5),
+            y: prev.y + (x / 5)
+          }));
       }
       
       spawnEffects(e.clientX, e.clientY);
+      setTimeout(() => setIsPressed(false), 150);
   };
 
   // Cleanup Effects
@@ -119,9 +173,9 @@ const Exchange: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col h-full pb-24 pt-4 px-4 overflow-hidden relative select-none">
+    <div className="flex flex-col h-full pb-24 pt-4 px-4 overflow-hidden relative select-none" ref={containerRef}>
       
-      {/* FIXED OVERLAY FOR EFFECTS - Uses viewport coordinates */}
+      {/* FIXED OVERLAY FOR EFFECTS */}
       <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
         {particles.map(p => (
             <div 
@@ -153,8 +207,12 @@ const Exchange: React.FC = () => {
          {clicks.map(click => (
             <div
                 key={click.id}
-                className="absolute text-5xl font-black text-white pointer-events-none animate-float drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]"
-                style={{ left: click.x, top: click.y }}
+                className="absolute text-5xl font-black text-white pointer-events-none animate-float drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50"
+                style={{ 
+                    left: click.x, 
+                    top: click.y,
+                    textShadow: `0 0 10px ${currentSkin.colors[0]}`
+                }}
             >
                 +{click.value}
             </div>
@@ -209,37 +267,87 @@ const Exchange: React.FC = () => {
         </div>
       </div>
 
-      {/* The Coin */}
-      <div className="flex-1 flex items-center justify-center relative min-h-[300px] z-20">
-        {/* Glow behind coin */}
+      {/* 3D COIN CONTAINER */}
+      <div className="flex-1 flex items-center justify-center relative min-h-[300px] z-20 perspective-container">
+        
+        {/* CSS for specific 3D container */}
+        <style dangerouslySetInnerHTML={{__html: `
+          .perspective-container {
+            perspective: 1000px;
+          }
+          .coin-3d {
+            transform-style: preserve-3d;
+            transition: transform 0.1s cubic-bezier(0.2, 0, 0.4, 1);
+          }
+          .coin-layer {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            backface-visibility: hidden;
+          }
+        `}} />
+
+        {/* Ambient Glow */}
         <div 
             className="absolute w-[280px] h-[280px] rounded-full blur-[80px] transition-colors duration-500 opacity-60 animate-pulse"
-            style={{ backgroundColor: currentSkin.colors[0] }}
+            style={{ 
+                backgroundColor: currentSkin.colors[0],
+                transform: `translate(${rotation.y}px, ${rotation.x}px)` // Glow moves slightly
+            }}
         ></div>
 
         <div 
             ref={coinRef}
-            className="coin-container w-[300px] h-[300px] rounded-full cursor-pointer relative z-10 touch-none select-none active:scale-95 transition-transform duration-75"
+            className="coin-3d w-[300px] h-[300px] relative z-10 cursor-pointer touch-none select-none"
             onMouseDown={handleMouseDown}
             onTouchStart={handleTouch}
+            style={{
+                transform: `
+                    rotateX(${rotation.x}deg) 
+                    rotateY(${rotation.y}deg) 
+                    scale(${isPressed ? 0.95 : 1})
+                `
+            }}
         >
+            {/* THICKNESS LAYERS (Simulating edge) */}
+            {[...Array(5)].map((_, i) => (
+                <div 
+                    key={i}
+                    className="coin-layer"
+                    style={{
+                        backgroundColor: '#b45309', // Darker gold/bronze for edge
+                        transform: `translateZ(-${i * 2}px)`,
+                        width: '100%',
+                        height: '100%',
+                        boxShadow: '0 0 2px rgba(0,0,0,0.5)'
+                    }}
+                />
+            ))}
+
+            {/* MAIN FACE */}
             <div 
-                className="coin-inner w-full h-full rounded-full flex items-center justify-center border-[8px] border-opacity-20 border-white relative overflow-hidden"
+                className="coin-layer flex items-center justify-center border-[8px] border-opacity-30 border-white relative overflow-hidden"
                 style={{
-                    background: `radial-gradient(circle at 30% 30%, ${currentSkin.colors[0]}, ${currentSkin.colors[1]})`,
-                    transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+                    background: `radial-gradient(circle at 50% 50%, ${currentSkin.colors[0]}, ${currentSkin.colors[1]})`,
+                    transform: 'translateZ(0px)',
                     boxShadow: `
-                        0 20px 50px -10px ${currentSkin.colors[1]}88, 
-                        inset 0 0 40px rgba(255,255,255,0.4),
-                        inset 0 -10px 20px rgba(0,0,0,0.3)
+                        inset 0 0 30px rgba(0,0,0,0.2),
+                        0 10px 30px rgba(0,0,0,0.5)
                     `
                 }}
             >
-                {/* Shine effect */}
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-full"></div>
-                
+                {/* Dynamic Glare/Shine */}
+                <div 
+                    className="absolute inset-0 pointer-events-none rounded-full"
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%)',
+                        transform: `translate(${rotation.y * 2}px, ${rotation.x * 2}px) scale(1.5)`,
+                        opacity: 0.6
+                    }}
+                />
+
                 {/* Inner Ring */}
-                <div className="absolute inset-4 rounded-full border-2 border-white/10 border-dashed opacity-50"></div>
+                <div className="absolute inset-4 rounded-full border-2 border-white/20 border-dashed opacity-70"></div>
 
                 <span className="text-9xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.3)] select-none pointer-events-none transform transition-transform group-hover:scale-110">
                     {currentSkin.symbol}
@@ -268,7 +376,7 @@ const Exchange: React.FC = () => {
       {/* Skin Selection Modal */}
       {showSkins && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col justify-end">
-            <div className="bg-[#1c1c1e] rounded-t-3xl p-6 h-[75vh] flex flex-col animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)] border-t border-white/10 shadow-2xl">
+            <div className="bg-[#1c1c1e] rounded-t-3xl p-6 h-[75vh] flex flex-col animate-slide-up border-t border-white/10 shadow-2xl">
                 <div className="flex justify-between items-center mb-8">
                     <h2 className="text-2xl font-bold text-white">Магазин Скинов</h2>
                     <button onClick={() => setShowSkins(false)} className="p-2 bg-white/5 rounded-full hover:bg-white/10"><X size={24} /></button>

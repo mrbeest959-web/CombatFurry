@@ -35,7 +35,7 @@ const Leaderboard: React.FC = () => {
         </div>
 
         {/* Current League Display */}
-        <div className="bg-gradient-to-br from-[#1c1c1e] to-black border border-yellow-500/20 rounded-2xl p-6 mb-6 text-center relative overflow-hidden shadow-2xl z-10 animate-in fade-in slide-in-from-top-4">
+        <div className="bg-gradient-to-br from-[#1c1c1e] to-black border border-yellow-500/20 rounded-2xl p-6 mb-6 text-center relative overflow-hidden shadow-2xl z-10 animate-slide-in-bottom">
             <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
             
             <h2 className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500 font-black text-2xl mb-1 uppercase tracking-widest">{currentLevelName}</h2>
@@ -57,7 +57,7 @@ const Leaderboard: React.FC = () => {
                         key={user.id} 
                         style={{ animationDelay: `${index * 50}ms` }}
                         className={`
-                            rounded-xl p-4 flex items-center justify-between border relative overflow-hidden transition-all duration-300 animate-in slide-in-from-bottom-4 fade-in
+                            rounded-xl p-4 flex items-center justify-between border relative overflow-hidden transition-all duration-300 animate-slide-in-bottom
                             ${isMe 
                                 ? 'bg-yellow-500/10 border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.2)] scale-[1.02]' 
                                 : 'bg-[#1c1c1e] border-white/5 opacity-90 hover:opacity-100'

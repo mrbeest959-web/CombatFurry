@@ -19,7 +19,7 @@ const Onboarding: React.FC = () => {
       <div className="absolute top-[-20%] left-[-20%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-[-20%] right-[-20%] w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="z-10 w-full max-w-md flex flex-col items-center animate-[fadeIn_0.5s_ease-out]">
+      <div className="z-10 w-full max-w-md flex flex-col items-center animate-fade-in">
         <div className="mb-8 relative">
            <div className="absolute inset-0 bg-yellow-400/20 blur-xl rounded-full"></div>
            <Globe size={80} className="text-yellow-400 relative z-10 animate-pulse" />

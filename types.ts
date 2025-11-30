@@ -10,6 +10,7 @@ export interface UserState {
   purchasedUpgrades: Record<string, number>; // id -> level
   unlockedSkins: string[];
   activeSkin: string;
+  walletConnected: boolean;
 }
 
 export interface UpgradeItem {
