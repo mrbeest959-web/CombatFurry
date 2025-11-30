@@ -10,37 +10,34 @@ import Onboarding from './components/Onboarding';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<GameTab>(GameTab.EXCHANGE);
-  const [isLoaded, setIsLoaded] = useState(false);
   
-  // Game State
-  const [userState, setUserState] = useState<UserState>({
-    username: null,
-    balance: 0,
-    profitPerHour: 0,
-    energy: MAX_ENERGY_BASE,
-    maxEnergy: MAX_ENERGY_BASE,
-    level: 0,
-    tapPower: 1,
-    lastSync: Date.now(),
-    unlockedSkins: ['default'],
-    currentSkin: 'default'
+  // Game State - Initialized synchronously from localStorage to avoid loading screens
+  const [userState, setUserState] = useState<UserState>(() => {
+    const defaultState: UserState = {
+        username: null,
+        balance: 0,
+        profitPerHour: 0,
+        energy: MAX_ENERGY_BASE,
+        maxEnergy: MAX_ENERGY_BASE,
+        level: 0,
+        tapPower: 1,
+        lastSync: Date.now(),
+        unlockedSkins: ['default'],
+        currentSkin: 'default'
+    };
+
+    try {
+        const storedUser = localStorage.getItem('fc_user_data');
+        if (storedUser) {
+            return { ...defaultState, ...JSON.parse(storedUser) };
+        }
+    } catch (e) {
+        // Ignore privacy mode errors
+    }
+    return defaultState;
   });
 
   const [upgrades, setUpgrades] = useState<Upgrade[]>(INITIAL_UPGRADES);
-
-  // Load User Data
-  useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('fc_user_data');
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser);
-        setUserState(prev => ({ ...prev, ...parsed }));
-      }
-    } catch (e) {
-      console.warn("Failed to load save (Privacy mode?):", e);
-    }
-    setIsLoaded(true);
-  }, []);
 
   // Save Loop & Passive Income
   useEffect(() => {
@@ -76,7 +73,7 @@ const App: React.FC = () => {
           lastSync: now,
         };
 
-        // Auto Save to LocalStorage (Persisting DB Simulation)
+        // Auto Save to LocalStorage
         try {
           localStorage.setItem('fc_user_data', JSON.stringify({
               username: newState.username,
@@ -88,7 +85,7 @@ const App: React.FC = () => {
               lastSync: now
           }));
         } catch (e) {
-          // Ignore save errors in strict environments
+          // Ignore save errors
         }
 
         return newState;
@@ -125,8 +122,6 @@ const App: React.FC = () => {
         return null;
     }
   };
-
-  if (!isLoaded) return <div className="bg-black min-h-screen text-white flex items-center justify-center">Loading...</div>;
 
   if (!userState.username) {
     return <Onboarding onComplete={handleOnboardingComplete} />;
