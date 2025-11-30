@@ -33,24 +33,65 @@
         background-color: #000;
         color: #fff;
         overflow: hidden; /* Prevent scrolling on main body */
+        margin: 0;
+        padding: 0;
+      }
+      #error-log {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background: rgba(100, 0, 0, 0.9);
+        color: white;
+        padding: 20px;
+        z-index: 9999;
+        white-space: pre-wrap;
+        font-family: monospace;
+        font-size: 12px;
       }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
     "vite": "https://aistudiocdn.com/vite@^7.2.4",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
 }
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
   <body>
-    <div id="root"></div>
+    <div id="error-log"></div>
+    <div id="root">
+        <!-- Fallback loading state visible before React mounts -->
+        <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;">
+            <div style="width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <p style="margin-top: 20px; font-family: sans-serif;">Загрузка приложения...</p>
+        </div>
+        <style>
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+    </div>
+    
+    <!-- Error Handler Script -->
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        var log = document.getElementById('error-log');
+        log.style.display = 'block';
+        log.innerText += "Error: " + message + "\nLine: " + lineno + "\nSource: " + source + "\n\n";
+      };
+      window.onunhandledrejection = function(event) {
+        var log = document.getElementById('error-log');
+        log.style.display = 'block';
+        log.innerText += "Promise Error: " + event.reason + "\n\n";
+      };
+    </script>
+
     <script type="module" src="./index.tsx"></script>
   <script type="module" src="/index.tsx"></script>
 </body>

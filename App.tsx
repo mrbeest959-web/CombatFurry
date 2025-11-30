@@ -30,14 +30,14 @@ const App: React.FC = () => {
 
   // Load User Data
   useEffect(() => {
-    const storedUser = localStorage.getItem('fc_user_data');
-    if (storedUser) {
-      try {
+    try {
+      const storedUser = localStorage.getItem('fc_user_data');
+      if (storedUser) {
         const parsed = JSON.parse(storedUser);
         setUserState(prev => ({ ...prev, ...parsed }));
-      } catch (e) {
-        console.error("Failed to load save", e);
       }
+    } catch (e) {
+      console.warn("Failed to load save (Privacy mode?):", e);
     }
     setIsLoaded(true);
   }, []);
@@ -77,15 +77,19 @@ const App: React.FC = () => {
         };
 
         // Auto Save to LocalStorage (Persisting DB Simulation)
-        localStorage.setItem('fc_user_data', JSON.stringify({
-            username: newState.username,
-            balance: newState.balance,
-            profitPerHour: newState.profitPerHour,
-            level: newState.level,
-            unlockedSkins: newState.unlockedSkins,
-            currentSkin: newState.currentSkin,
-            lastSync: now
-        }));
+        try {
+          localStorage.setItem('fc_user_data', JSON.stringify({
+              username: newState.username,
+              balance: newState.balance,
+              profitPerHour: newState.profitPerHour,
+              level: newState.level,
+              unlockedSkins: newState.unlockedSkins,
+              currentSkin: newState.currentSkin,
+              lastSync: now
+          }));
+        } catch (e) {
+          // Ignore save errors in strict environments
+        }
 
         return newState;
       });
@@ -100,7 +104,11 @@ const App: React.FC = () => {
         username: username
     };
     setUserState(newUserState);
-    localStorage.setItem('fc_user_data', JSON.stringify(newUserState));
+    try {
+      localStorage.setItem('fc_user_data', JSON.stringify(newUserState));
+    } catch (e) {
+      console.warn("Save failed");
+    }
   };
 
   const renderContent = () => {
