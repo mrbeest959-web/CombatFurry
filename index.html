@@ -7,48 +7,80 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       body {
-        background-color: #000;
-        color: #fff;
-        overflow: hidden;
-        margin: 0;
-        padding: 0;
-      }
-      .no-select {
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
+        background-color: #000000;
+        color: #ffffff;
+        overflow: hidden; /* Prevent scroll on body, handle in app */
+        touch-action: none; /* Disable browser handling of gestures */
         user-select: none;
+        -webkit-user-select: none;
         -webkit-tap-highlight-color: transparent;
       }
-      /* Simple float animation for clicks */
-      @keyframes float {
-        0% { transform: translateY(0px); opacity: 1; }
-        100% { transform: translateY(-100px); opacity: 0; }
+      /* Custom scrollbar for webkit */
+      ::-webkit-scrollbar {
+        width: 4px;
       }
-      .float-text {
+      ::-webkit-scrollbar-track {
+        background: #1c1c1e;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #444;
+        border-radius: 2px;
+      }
+      
+      /* Float animation for click text */
+      @keyframes floatUp {
+        0% { transform: translateY(0) scale(0.5); opacity: 1; }
+        50% { transform: translateY(-80px) scale(1.5); opacity: 1; }
+        100% { transform: translateY(-150px) scale(1); opacity: 0; }
+      }
+      .animate-float {
+        animation: floatUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      }
+
+      /* Coin tilt perspective */
+      .coin-container {
+        perspective: 1000px;
+        transform-style: preserve-3d;
+      }
+      .coin-inner {
+        transform-style: preserve-3d;
+        transition: transform 0.05s linear; /* Faster response */
+      }
+      
+      /* Particle Animations */
+      @keyframes particleMove {
+        0% { transform: translate(0, 0) scale(1); opacity: 1; }
+        100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+      }
+      .particle {
         position: absolute;
-        animation: float 1s ease-out forwards;
         pointer-events: none;
-        color: white;
-        font-weight: bold;
-        font-size: 24px;
-        text-shadow: 0 0 5px rgba(0,0,0,0.5);
+        animation: particleMove 0.6s ease-out forwards;
+      }
+
+      /* Shockwave effect */
+      @keyframes shockwave {
+        0% { transform: scale(0.5); opacity: 0.8; border-width: 4px; }
+        100% { transform: scale(2); opacity: 0; border-width: 0px; }
+      }
+      .shockwave {
+        animation: shockwave 0.3s ease-out forwards;
       }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "vite": "https://aistudiocdn.com/vite@^7.2.4",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
-  </body>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>
