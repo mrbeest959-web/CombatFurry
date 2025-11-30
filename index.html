@@ -8,45 +8,48 @@
     <style>
       html, body, #root {
         height: 100%;
+        width: 100%;
         margin: 0;
         padding: 0;
+        background-color: #000000;
+        overflow: hidden;
       }
       body {
-        background-color: #000000;
         color: #ffffff;
-        overflow: hidden;
         touch-action: none;
         user-select: none;
         -webkit-user-select: none;
         -webkit-tap-highlight-color: transparent;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
       
-      ::-webkit-scrollbar { width: 4px; }
-      ::-webkit-scrollbar-track { background: #1c1c1e; }
-      ::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+      /* --- GLOBAL ANIMATIONS --- */
       
-      /* --- ANIMATIONS --- */
-      
-      /* Float Text */
       @keyframes floatUp {
-        0% { transform: translateY(0) scale(0.5); opacity: 1; }
-        50% { transform: translateY(-80px) scale(1.5); opacity: 1; }
-        100% { transform: translateY(-150px) scale(1); opacity: 0; }
+        0% { transform: translateY(0) scale(0.5) rotate(var(--rot)); opacity: 1; }
+        100% { transform: translateY(-100px) scale(1) rotate(var(--rot)); opacity: 0; }
       }
       .animate-float {
-        animation: floatUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        animation: floatUp 0.6s ease-out forwards;
       }
 
-      /* Fade In */
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
+      @keyframes shake {
+        0% { transform: translate(1px, 1px) rotate(0deg); }
+        10% { transform: translate(-1px, -2px) rotate(-1deg); }
+        20% { transform: translate(-3px, 0px) rotate(1deg); }
+        30% { transform: translate(3px, 2px) rotate(0deg); }
+        40% { transform: translate(1px, -1px) rotate(1deg); }
+        50% { transform: translate(-1px, 2px) rotate(-1deg); }
+        60% { transform: translate(-3px, 1px) rotate(0deg); }
+        70% { transform: translate(3px, 1px) rotate(-1deg); }
+        80% { transform: translate(-1px, -1px) rotate(1deg); }
+        90% { transform: translate(1px, 2px) rotate(0deg); }
+        100% { transform: translate(1px, -2px) rotate(-1deg); }
       }
-      .animate-fade-in {
-        animation: fadeIn 0.5s ease-out forwards;
+      .animate-shake {
+        animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
       }
 
-      /* Slide Up (Modal) */
       @keyframes slideUp {
         from { transform: translateY(100%); }
         to { transform: translateY(0); }
@@ -55,16 +58,6 @@
         animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
 
-      /* Slide In From Bottom (Lists) */
-      @keyframes slideInBottom {
-        from { transform: translateY(20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-      }
-      .animate-slide-in-bottom {
-        animation: slideInBottom 0.5s ease-out forwards;
-      }
-
-      /* Zoom In */
       @keyframes zoomIn {
         from { transform: scale(0.9); opacity: 0; }
         to { transform: scale(1); opacity: 1; }
@@ -72,48 +65,23 @@
       .animate-zoom-in {
         animation: zoomIn 0.3s ease-out forwards;
       }
-
-      /* Pulse/Bounce Utilities */
-      .animate-bounce-subtle {
-        animation: bounceSubtle 0.5s infinite;
-      }
-      @keyframes bounceSubtle {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-5px); }
-      }
-
-      /* Game FX */
-      .coin-container { perspective: 1000px; transform-style: preserve-3d; }
-      .coin-inner { transform-style: preserve-3d; transition: transform 0.05s linear; }
       
-      @keyframes particleMove {
-        0% { transform: translate(0, 0) scale(1); opacity: 1; }
-        100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 20px rgba(250, 204, 21, 0.2); }
+        50% { box-shadow: 0 0 40px rgba(250, 204, 21, 0.6); }
       }
-      .particle {
-        position: absolute;
-        pointer-events: none;
-        animation: particleMove 0.6s ease-out forwards;
+      .animate-pulse-glow {
+        animation: pulse-glow 2s infinite;
       }
 
-      @keyframes shockwave {
-        0% { transform: scale(0.5); opacity: 0.8; border-width: 4px; }
-        100% { transform: scale(2); opacity: 0; border-width: 0px; }
+      /* No Scrollbar Utility */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
       }
-      .shockwave {
-        animation: shockwave 0.3s ease-out forwards;
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
       }
-      
-      /* Spinner for raw HTML loading state */
-      .raw-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid #333;
-        border-top: 4px solid #facc15;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
   <script type="importmap">
 {
@@ -128,14 +96,7 @@
 <link rel="stylesheet" href="/index.css">
 </head>
   <body>
-    <div id="root">
-        <!-- Initial Loading State visible before React mounts -->
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: black; color: white;">
-            <div class="raw-spinner"></div>
-            <p style="margin-top: 20px; font-family: monospace; color: #666;">Запуск приложения...</p>
-        </div>
-    </div>
-    <!-- CRITICAL: This script tag was missing. It launches the React App. -->
+    <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
   <script type="module" src="/index.tsx"></script>
 </body>

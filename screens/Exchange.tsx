@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useGame } from '../contexts/GameContext';
 import { LEVEL_THRESHOLDS, SKINS } from '../constants';
 import { FloatingText, Particle } from '../types';
-import { Zap, X } from 'lucide-react';
+import { Zap, X, Flame } from 'lucide-react';
 
 const Exchange: React.FC = () => {
   const { state, handleTap, equipSkin, buySkin } = useGame();
@@ -12,10 +12,13 @@ const Exchange: React.FC = () => {
   const [clicks, setClicks] = useState<FloatingText[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [shockwaves, setShockwaves] = useState<{id: number, x: number, y: number}[]>([]);
+  const [combo, setCombo] = useState(0);
+  const comboTimeoutRef = useRef<any>(null);
   
   // 3D Rotation States
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
-  const [isPressed, setIsPressed] = useState(false);
+  const [scale, setScale] = useState(1);
+  const [shake, setShake] = useState(false);
   
   // UI States
   const [showSkins, setShowSkins] = useState(false);
@@ -48,22 +51,18 @@ const Exchange: React.FC = () => {
         const mouseX = (e.clientX - centerX) / (width / 2);
         const mouseY = (e.clientY - centerY) / (height / 2);
         
-        // Limit rotation to 25 degrees
+        // Limit rotation
         setRotation({
-            x: -mouseY * 25,
-            y: mouseX * 25
+            x: -mouseY * 20,
+            y: mouseX * 20
         });
     };
 
     // Device Orientation Handler (Mobile)
     const handleOrientation = (e: DeviceOrientationEvent) => {
         if (!e.beta || !e.gamma) return;
-        
-        // Beta is front/back tilt (-180 to 180). We clamp to +/- 45
-        // Gamma is left/right tilt (-90 to 90). We clamp to +/- 45
-        const x = Math.min(Math.max(e.beta - 45, -25), 25); // Offset by 45deg for comfortable holding angle
-        const y = Math.min(Math.max(e.gamma, -25), 25);
-        
+        const x = Math.min(Math.max(e.beta - 45, -20), 20);
+        const y = Math.min(Math.max(e.gamma, -20), 20);
         setRotation({ x: -x, y: y });
     };
 
@@ -76,9 +75,21 @@ const Exchange: React.FC = () => {
     };
   }, []);
 
+  const triggerShake = () => {
+      setShake(true);
+      setTimeout(() => setShake(false), 200);
+  };
+
+  const incrementCombo = () => {
+      setCombo(prev => prev + 1);
+      if (comboTimeoutRef.current) clearTimeout(comboTimeoutRef.current);
+      comboTimeoutRef.current = setTimeout(() => setCombo(0), 1000);
+  };
+
   const spawnEffects = (x: number, y: number) => {
      // Floating Text
      const id = Date.now() + Math.random();
+     const randomRot = (Math.random() - 0.5) * 30; // Random rotation for text
      setClicks(prev => [...prev, { id, x, y, value: state.level }]);
 
      // Shockwave
@@ -86,10 +97,10 @@ const Exchange: React.FC = () => {
 
      // Spawn Particles
      const newParticles: Particle[] = [];
-     const particleCount = 6;
+     const particleCount = combo > 10 ? 12 : 6; // More particles on high combo
      for (let i = 0; i < particleCount; i++) {
        const angle = (Math.PI * 2 * i) / particleCount;
-       const velocity = 60 + Math.random() * 40;
+       const velocity = 80 + Math.random() * 60;
        const tx = Math.cos(angle) * velocity;
        const ty = Math.sin(angle) * velocity;
        const rotation = Math.random() * 360;
@@ -101,64 +112,52 @@ const Exchange: React.FC = () => {
            tx,
            ty,
            tr: rotation,
-           color: currentSkin.colors[0]
+           color: i % 2 === 0 ? currentSkin.colors[0] : '#ffffff'
        });
      }
      setParticles(prev => [...prev, ...newParticles]);
   }
 
+  const handleInteraction = (clientX: number, clientY: number) => {
+      const success = handleTap(state.level);
+      if (!success) return;
+
+      incrementCombo();
+      if (combo > 5) triggerShake(); // Shake screen on combo
+
+      // Add impulse to rotation
+      if (coinRef.current) {
+          const rect = coinRef.current.getBoundingClientRect();
+          const x = clientX - rect.left - rect.width / 2;
+          const y = clientY - rect.top - rect.height / 2;
+          
+          setRotation(prev => ({
+              x: prev.x - (y / 8),
+              y: prev.y + (x / 8)
+          }));
+          
+          // Squash effect
+          setScale(0.9);
+          setTimeout(() => setScale(1), 100);
+      }
+
+      spawnEffects(clientX, clientY);
+
+      if (navigator.vibrate) {
+          navigator.vibrate(combo > 10 ? 30 : 15);
+      }
+  };
+
   const handleTouch = (e: React.TouchEvent) => {
-    // e.preventDefault(); // Handled by CSS touch-action: none
-    setIsPressed(true);
+    // e.preventDefault();
     const touches = Array.from(e.changedTouches) as any[];
-    
-    // Add extra "punch" to rotation based on tap location
-    if (touches.length > 0 && coinRef.current) {
-        const rect = coinRef.current.getBoundingClientRect();
-        const touch = touches[0];
-        const x = touch.clientX - rect.left - rect.width / 2;
-        const y = touch.clientY - rect.top - rect.height / 2;
-        
-        setRotation(prev => ({
-            x: prev.x - (y / 5), // Add impulse
-            y: prev.y + (x / 5)
-        }));
-    }
-
-    let tapCount = 0;
     touches.forEach(touch => {
-        const success = handleTap(state.level);
-        if (success) {
-            tapCount++;
-            spawnEffects(touch.clientX, touch.clientY);
-        }
+        handleInteraction(touch.clientX, touch.clientY);
     });
-
-    if (tapCount > 0 && navigator.vibrate) {
-        navigator.vibrate(tapCount * 15);
-    }
-    
-    setTimeout(() => setIsPressed(false), 150);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-      setIsPressed(true);
-      const success = handleTap(state.level);
-      if (!success) return;
-      
-      // Add click impulse
-      if (coinRef.current) {
-          const rect = coinRef.current.getBoundingClientRect();
-          const x = e.clientX - rect.left - rect.width / 2;
-          const y = e.clientY - rect.top - rect.height / 2;
-          setRotation(prev => ({
-            x: prev.x - (y / 5),
-            y: prev.y + (x / 5)
-          }));
-      }
-      
-      spawnEffects(e.clientX, e.clientY);
-      setTimeout(() => setIsPressed(false), 150);
+      handleInteraction(e.clientX, e.clientY);
   };
 
   // Cleanup Effects
@@ -166,14 +165,14 @@ const Exchange: React.FC = () => {
     const timer = setInterval(() => {
       const now = Date.now();
       setClicks(prev => prev.filter(c => now - c.id < 800));
-      setParticles(prev => prev.length > 20 ? prev.slice(10) : prev);
+      setParticles(prev => prev.length > 30 ? prev.slice(15) : prev);
       setShockwaves(prev => prev.filter(s => now - s.id < 500));
     }, 100);
     return () => clearInterval(timer);
   }, []);
 
   return (
-    <div className="flex flex-col h-full pb-24 pt-4 px-4 overflow-hidden relative select-none" ref={containerRef}>
+    <div className={`flex flex-col h-full pb-24 pt-4 px-4 overflow-hidden relative select-none ${shake ? 'animate-shake' : ''}`} ref={containerRef}>
       
       {/* FIXED OVERLAY FOR EFFECTS */}
       <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
@@ -194,12 +193,12 @@ const Exchange: React.FC = () => {
         {shockwaves.map(s => (
             <div 
                 key={s.id}
-                className="absolute rounded-full border-2 border-white shockwave"
+                className="absolute rounded-full border-4 border-white shockwave"
                 style={{
-                    left: s.x - 40,
-                    top: s.y - 40,
-                    width: 80,
-                    height: 80,
+                    left: s.x - 50,
+                    top: s.y - 50,
+                    width: 100,
+                    height: 100,
                     borderColor: currentSkin.colors[1]
                 }}
             />
@@ -207,12 +206,13 @@ const Exchange: React.FC = () => {
          {clicks.map(click => (
             <div
                 key={click.id}
-                className="absolute text-5xl font-black text-white pointer-events-none animate-float drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50"
+                className="absolute text-6xl font-black text-white pointer-events-none animate-float drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50"
                 style={{ 
                     left: click.x, 
                     top: click.y,
-                    textShadow: `0 0 10px ${currentSkin.colors[0]}`
-                }}
+                    textShadow: `0 0 20px ${currentSkin.colors[0]}`,
+                    '--rot': `${(Math.random() - 0.5) * 40}deg`
+                } as React.CSSProperties}
             >
                 +{click.value}
             </div>
@@ -220,136 +220,132 @@ const Exchange: React.FC = () => {
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 z-20">
+      <div className="flex items-center justify-between mb-2 z-20">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 flex items-center justify-center font-bold text-black text-xl shadow-lg border border-white/20">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 flex items-center justify-center font-bold text-black text-2xl shadow-[0_0_15px_rgba(250,204,21,0.5)] border-2 border-white/20">
             {state.username.charAt(0).toUpperCase()}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-white tracking-wide">{state.username}</span>
-            <span className="text-xs text-yellow-400 font-mono">{currentLevelName}</span>
+            <span className="text-lg font-bold text-white tracking-wide">{state.username}</span>
+            <div className="flex items-center space-x-1">
+                <span className="text-xs text-yellow-400 font-mono bg-yellow-400/10 px-2 py-0.5 rounded">{currentLevelName}</span>
+                {combo > 1 && (
+                    <span className="text-xs text-orange-400 font-bold font-mono animate-pulse">COMBO x{combo}</span>
+                )}
+            </div>
           </div>
         </div>
         <button 
           onClick={() => setShowSkins(true)}
-          className="bg-[#1c1c1e] border border-white/10 px-4 py-2 rounded-full text-xs font-bold text-white hover:bg-white/10 transition-all active:scale-95 shadow-lg"
+          className="bg-[#1c1c1e] border border-white/10 px-4 py-2 rounded-full text-xs font-bold text-white hover:bg-white/10 transition-all active:scale-95 shadow-lg flex items-center space-x-2"
         >
-          Скины
+          <Flame size={16} className="text-orange-500" />
+          <span>Скины</span>
         </button>
       </div>
 
       {/* Progress Card */}
-      <div className="bg-[#1c1c1e]/80 backdrop-blur-sm rounded-2xl p-4 mb-6 border border-white/5 shadow-xl relative overflow-hidden z-20">
+      <div className="bg-[#1c1c1e]/80 backdrop-blur-sm rounded-2xl p-4 mb-4 border border-white/5 shadow-xl relative overflow-hidden z-20">
         <div className="flex justify-between text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">
-            <span>Прогресс уровня</span>
-            <span>{Math.floor(state.level)} / 10</span>
+            <span>Level {Math.floor(state.level)}</span>
+            <span>{Math.floor(state.balance).toLocaleString()} / {nextLevelThreshold.toLocaleString()}</span>
         </div>
-        <div className="w-full h-3 bg-black/50 rounded-full overflow-hidden border border-white/5">
+        <div className="w-full h-4 bg-black/50 rounded-full overflow-hidden border border-white/5 relative">
             <div 
-                className="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 transition-all duration-300 shadow-[0_0_10px_rgba(234,179,8,0.5)]"
+                className="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 transition-all duration-300 shadow-[0_0_15px_rgba(234,179,8,0.6)] relative"
                 style={{ width: `${progressPercent}%` }}
-            />
+            >
+                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+            </div>
         </div>
       </div>
 
       {/* Balance */}
-      <div className="flex flex-col items-center mb-6 z-20 relative">
-        <div className="absolute inset-0 bg-yellow-500/5 blur-3xl rounded-full transform -translate-y-1/2 pointer-events-none"></div>
-        <div className="flex items-center space-x-3 relative">
-            <img src="https://cryptologos.cc/logos/tether-usdt-logo.png?v=022" className="w-10 h-10 drop-shadow-lg" alt="USDT" />
-            <h1 className="text-5xl font-black font-mono tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 drop-shadow-2xl">
+      <div className="flex flex-col items-center mb-4 z-20 relative">
+        <div className="absolute inset-0 bg-yellow-500/10 blur-[60px] rounded-full transform -translate-y-1/2 pointer-events-none"></div>
+        <div className="flex items-center space-x-3 relative transform hover:scale-105 transition-transform cursor-default">
+            <img src="https://cryptologos.cc/logos/tether-usdt-logo.png?v=022" className="w-12 h-12 drop-shadow-[0_0_10px_rgba(38,161,123,0.5)]" alt="USDT" />
+            <h1 className="text-6xl font-black font-mono tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 drop-shadow-2xl">
                 {Math.floor(state.balance).toLocaleString()}
             </h1>
         </div>
-        <div className="text-yellow-400/80 text-sm mt-1 font-mono font-bold tracking-widest uppercase flex items-center space-x-1 bg-yellow-400/5 px-2 py-0.5 rounded-lg border border-yellow-400/10">
-            <span>+{state.profitPerHour.toLocaleString()}</span>
-            <span>в час</span>
+        <div className="text-yellow-400/90 text-sm mt-2 font-mono font-bold tracking-widest uppercase flex items-center space-x-2 bg-[#1c1c1e] px-4 py-1.5 rounded-full border border-yellow-400/20 shadow-lg">
+            <Zap size={14} fill="currentColor" />
+            <span>+{state.profitPerHour.toLocaleString()}/ч</span>
         </div>
       </div>
 
       {/* 3D COIN CONTAINER */}
-      <div className="flex-1 flex items-center justify-center relative min-h-[300px] z-20 perspective-container">
+      <div className="flex-1 flex items-center justify-center relative min-h-[320px] z-20 perspective-container">
         
-        {/* CSS for specific 3D container */}
         <style dangerouslySetInnerHTML={{__html: `
-          .perspective-container {
-            perspective: 1000px;
-          }
-          .coin-3d {
-            transform-style: preserve-3d;
-            transition: transform 0.1s cubic-bezier(0.2, 0, 0.4, 1);
-          }
-          .coin-layer {
-            position: absolute;
-            inset: 0;
-            border-radius: 50%;
-            backface-visibility: hidden;
-          }
+          .perspective-container { perspective: 1000px; }
+          .coin-3d { transform-style: preserve-3d; transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         `}} />
 
-        {/* Ambient Glow */}
+        {/* Dynamic Glow Background */}
         <div 
-            className="absolute w-[280px] h-[280px] rounded-full blur-[80px] transition-colors duration-500 opacity-60 animate-pulse"
+            className="absolute w-[320px] h-[320px] rounded-full blur-[90px] transition-all duration-300 opacity-60 animate-pulse"
             style={{ 
                 backgroundColor: currentSkin.colors[0],
-                transform: `translate(${rotation.y}px, ${rotation.x}px)` // Glow moves slightly
+                transform: `scale(${1 + (combo * 0.05)}) translate(${rotation.y}px, ${rotation.x}px)`
             }}
         ></div>
 
         <div 
             ref={coinRef}
-            className="coin-3d w-[300px] h-[300px] relative z-10 cursor-pointer touch-none select-none"
+            className="coin-3d w-[320px] h-[320px] relative z-10 cursor-pointer touch-none select-none active:cursor-grabbing"
             onMouseDown={handleMouseDown}
             onTouchStart={handleTouch}
             style={{
                 transform: `
                     rotateX(${rotation.x}deg) 
                     rotateY(${rotation.y}deg) 
-                    scale(${isPressed ? 0.95 : 1})
+                    scale(${scale})
                 `
             }}
         >
-            {/* THICKNESS LAYERS (Simulating edge) */}
-            {[...Array(5)].map((_, i) => (
+            {/* THICKNESS LAYERS */}
+            {[...Array(6)].map((_, i) => (
                 <div 
                     key={i}
-                    className="coin-layer"
+                    className="absolute inset-0 rounded-full backface-hidden"
                     style={{
-                        backgroundColor: '#b45309', // Darker gold/bronze for edge
-                        transform: `translateZ(-${i * 2}px)`,
-                        width: '100%',
-                        height: '100%',
-                        boxShadow: '0 0 2px rgba(0,0,0,0.5)'
+                        backgroundColor: '#92400e', 
+                        transform: `translateZ(-${i * 3}px)`,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.8)'
                     }}
                 />
             ))}
 
             {/* MAIN FACE */}
             <div 
-                className="coin-layer flex items-center justify-center border-[8px] border-opacity-30 border-white relative overflow-hidden"
+                className="absolute inset-0 rounded-full flex items-center justify-center border-[10px] border-white/20 overflow-hidden backface-hidden"
                 style={{
-                    background: `radial-gradient(circle at 50% 50%, ${currentSkin.colors[0]}, ${currentSkin.colors[1]})`,
+                    background: `radial-gradient(circle at 30% 30%, ${currentSkin.colors[0]}, ${currentSkin.colors[1]})`,
                     transform: 'translateZ(0px)',
                     boxShadow: `
-                        inset 0 0 30px rgba(0,0,0,0.2),
-                        0 10px 30px rgba(0,0,0,0.5)
+                        inset 0 0 40px rgba(0,0,0,0.4),
+                        0 20px 50px rgba(0,0,0,0.6),
+                        0 0 0 2px rgba(255,255,255,0.1)
                     `
                 }}
             >
-                {/* Dynamic Glare/Shine */}
+                {/* Dynamic Glare */}
                 <div 
                     className="absolute inset-0 pointer-events-none rounded-full"
                     style={{
-                        background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%)',
-                        transform: `translate(${rotation.y * 2}px, ${rotation.x * 2}px) scale(1.5)`,
-                        opacity: 0.6
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 45%)',
+                        transform: `translate(${rotation.y * 1.5}px, ${rotation.x * 1.5}px) scale(1.2)`,
                     }}
                 />
 
-                {/* Inner Ring */}
-                <div className="absolute inset-4 rounded-full border-2 border-white/20 border-dashed opacity-70"></div>
+                {/* Texture Overlay */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 mix-blend-overlay"></div>
 
-                <span className="text-9xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.3)] select-none pointer-events-none transform transition-transform group-hover:scale-110">
+                <div className="absolute inset-6 rounded-full border-2 border-white/30 border-dashed opacity-80 animate-[spin_10s_linear_infinite]"></div>
+
+                <span className="text-9xl font-black text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.4)] select-none pointer-events-none transform transition-transform duration-200">
                     {currentSkin.symbol}
                 </span>
             </div>
@@ -359,27 +355,31 @@ const Exchange: React.FC = () => {
       {/* Energy Bar */}
       <div className="mt-auto mb-4 z-20">
         <div className="flex justify-between items-center mb-2">
-            <div className="flex items-center space-x-1 text-yellow-400">
-                <Zap size={20} fill="currentColor" className="animate-pulse" />
-                <span className="font-bold text-xl">{Math.floor(state.energy)}</span>
-                <span className="text-gray-500 text-sm font-bold">/ {state.maxEnergy}</span>
+            <div className="flex items-center space-x-2 text-yellow-400">
+                <div className="p-1 bg-yellow-400/10 rounded-full animate-bounce-subtle">
+                    <Zap size={18} fill="currentColor" />
+                </div>
+                <span className="font-bold text-xl tracking-tight">{Math.floor(state.energy)}</span>
+                <span className="text-gray-600 text-sm font-bold">/ {state.maxEnergy}</span>
             </div>
         </div>
-        <div className="w-full h-3 bg-[#1c1c1e] rounded-full overflow-hidden border border-white/5">
+        <div className="w-full h-4 bg-[#1c1c1e] rounded-full overflow-hidden border border-white/5 relative shadow-inner">
             <div 
-                className="h-full bg-gradient-to-r from-yellow-400 to-yellow-200 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(250,204,21,0.5)]"
+                className="h-full bg-gradient-to-r from-yellow-400 to-yellow-200 rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(250,204,21,0.5)]"
                 style={{ width: `${(state.energy / state.maxEnergy) * 100}%` }}
-            />
+            >
+                <div className="absolute top-0 right-0 h-full w-2 bg-white/50 blur-[2px]"></div>
+            </div>
         </div>
       </div>
 
       {/* Skin Selection Modal */}
       {showSkins && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col justify-end">
-            <div className="bg-[#1c1c1e] rounded-t-3xl p-6 h-[75vh] flex flex-col animate-slide-up border-t border-white/10 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-lg flex flex-col justify-end">
+            <div className="bg-[#1c1c1e] rounded-t-3xl p-6 h-[80vh] flex flex-col animate-slide-up border-t border-white/10 shadow-2xl">
                 <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-2xl font-bold text-white">Магазин Скинов</h2>
-                    <button onClick={() => setShowSkins(false)} className="p-2 bg-white/5 rounded-full hover:bg-white/10"><X size={24} /></button>
+                    <h2 className="text-3xl font-bold text-white tracking-tight">Магазин Скинов</h2>
+                    <button onClick={() => setShowSkins(false)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"><X size={24} /></button>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 overflow-y-auto pb-8 no-scrollbar">
@@ -394,21 +394,23 @@ const Exchange: React.FC = () => {
                                     if (isUnlocked) equipSkin(skin.id);
                                     else buySkin(skin);
                                 }}
-                                className={`p-4 rounded-2xl border-2 flex flex-col items-center relative transition-all active:scale-95 ${isActive ? 'border-yellow-400 bg-yellow-400/5' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
+                                className={`p-4 rounded-2xl border-2 flex flex-col items-center relative transition-all active:scale-95 group overflow-hidden ${isActive ? 'border-yellow-400 bg-yellow-400/5' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
                             >
+                                {isActive && <div className="absolute inset-0 bg-yellow-400/10 blur-xl"></div>}
+                                
                                 <div 
-                                    className="w-20 h-20 rounded-full mb-4 shadow-xl flex items-center justify-center text-3xl font-bold text-white border-2 border-white/10"
+                                    className="w-24 h-24 rounded-full mb-4 shadow-2xl flex items-center justify-center text-4xl font-bold text-white border-4 border-white/10 transform transition-transform group-hover:scale-110 group-hover:rotate-3"
                                     style={{ background: `linear-gradient(135deg, ${skin.colors[0]}, ${skin.colors[1]})` }}
                                 >
                                     {skin.symbol}
                                 </div>
-                                <h3 className="font-bold text-white mb-2">{skin.name}</h3>
+                                <h3 className="font-bold text-white mb-2 text-lg">{skin.name}</h3>
                                 {isUnlocked ? (
-                                    <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${isActive ? 'bg-green-500 text-black' : 'bg-white/10 text-gray-400'}`}>
-                                        {isActive ? 'Выбрано' : 'Куплено'}
+                                    <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center space-x-2 ${isActive ? 'bg-green-500 text-black shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-white/10 text-gray-400'}`}>
+                                        {isActive ? <span>ВЫБРАНО</span> : <span>КУПЛЕНО</span>}
                                     </div>
                                 ) : (
-                                    <div className="flex items-center text-yellow-400 text-sm font-mono font-bold bg-yellow-400/10 px-3 py-1 rounded-full">
+                                    <div className="flex items-center text-yellow-400 text-sm font-mono font-bold bg-yellow-400/10 px-4 py-1.5 rounded-full border border-yellow-400/20">
                                         <span>{skin.price.toLocaleString()}</span>
                                     </div>
                                 )}

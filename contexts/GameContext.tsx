@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserState, UpgradeItem, SkinItem, Tab, LeaderboardUser } from '../types';
 import { UPGRADES, SKINS, LEVEL_THRESHOLDS, INITIAL_LEADERBOARD_BOTS } from '../constants';
-// Removed Loader2 import to prevent crash if icon lib fails to load initially
 
 const INITIAL_STATE: UserState = {
   username: '',
@@ -41,63 +40,56 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // Load from local storage with Robust Error Handling
+  // Initialize Game State from Storage
   useEffect(() => {
     const initGame = async () => {
         try {
-            // Check if storage is available
             const storageAvailable = typeof window !== 'undefined' && window.localStorage;
-            
             if (storageAvailable) {
-                // Load User
+                // Load User Data
                 const saved = localStorage.getItem('furry_combat_save');
                 if (saved) {
-                    try {
-                        const parsed = JSON.parse(saved);
-                        
-                        // Calculate offline earnings
-                        const now = Date.now();
-                        const secondsPassed = (now - (parsed.lastLogin || now)) / 1000;
-                        const offlineEarnings = Math.floor((parsed.profitPerHour / 3600) * secondsPassed);
-                        
-                        // Energy Recovery
-                        const energyRecovery = Math.floor(secondsPassed * 4);
-                        const newEnergy = Math.min(parsed.maxEnergy, parsed.energy + energyRecovery);
+                    const parsed = JSON.parse(saved);
+                    
+                    // Offline Calc
+                    const now = Date.now();
+                    const lastLogin = parsed.lastLogin || now;
+                    const secondsPassed = (now - lastLogin) / 1000;
+                    
+                    // Max 3 hours of offline earnings to prevent abuse
+                    const validSeconds = Math.min(secondsPassed, 3 * 3600); 
+                    const offlineEarnings = Math.floor((parsed.profitPerHour / 3600) * validSeconds);
+                    
+                    // Energy Regen
+                    const energyRecovery = Math.floor(secondsPassed * 4);
+                    const newEnergy = Math.min(parsed.maxEnergy, parsed.energy + energyRecovery);
 
-                        setState({
-                            ...parsed,
-                            balance: parsed.balance + (Number.isNaN(offlineEarnings) ? 0 : offlineEarnings),
-                            energy: Number.isNaN(newEnergy) ? 2000 : newEnergy,
-                            lastLogin: now,
-                            walletConnected: parsed.walletConnected || false 
-                        });
-                    } catch (parseError) {
-                        console.error("Error parsing save file, resetting:", parseError);
-                        // Optional: localStorage.removeItem('furry_combat_save');
-                    }
+                    setState({
+                        ...parsed,
+                        balance: parsed.balance + (Number.isNaN(offlineEarnings) ? 0 : offlineEarnings),
+                        energy: Number.isNaN(newEnergy) ? 2000 : newEnergy,
+                        lastLogin: now,
+                        walletConnected: parsed.walletConnected || false
+                    });
                 }
 
-                // Load Leaderboard DB (Bots)
+                // Load Bot Data
                 const savedBots = localStorage.getItem('furry_combat_bots');
                 if (savedBots) {
-                    try {
-                        setBots(JSON.parse(savedBots));
-                    } catch (e) { console.error("Error parsing bots", e); }
+                    setBots(JSON.parse(savedBots));
                 }
             }
         } catch (e) {
-            console.error("Critical storage error:", e);
+            console.error("Initialization error:", e);
         } finally {
-            // Always set loaded to true so the app starts even if storage fails
             setLoaded(true);
         }
     };
     
-    // Small timeout to ensure DOM is ready and prevent race conditions
-    setTimeout(initGame, 100);
+    initGame();
   }, []);
 
-  // Simulate Live Leaderboard (Bots gaining score) & Persist to DB
+  // Bot Logic (Fake Live Leaderboard)
   useEffect(() => {
     if (!loaded) return;
 
@@ -105,26 +97,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setBots(prevBots => {
             const updatedBots = prevBots.map(bot => ({
                 ...bot,
-                balance: bot.balance + Math.floor(Math.random() * 500) // Bots farm too!
+                balance: bot.balance + Math.floor(Math.random() * 800)
             }));
 
-            // Save to "Database" (LocalStorage)
+            // Auto-Save Bots
             try {
-                if (typeof window !== 'undefined' && window.localStorage) {
-                    localStorage.setItem('furry_combat_bots', JSON.stringify(updatedBots));
-                }
-            } catch (e) {
-                // Silent fail for storage quotas
-            }
+               localStorage.setItem('furry_combat_bots', JSON.stringify(updatedBots));
+            } catch {}
             
             return updatedBots;
         });
-    }, 2000); // Updates every 2 seconds
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [loaded]);
 
-  // Combine Bots + User to form Leaderboard
+  // Leaderboard Construction
   useEffect(() => {
     if (!state.isOnboarded) return;
 
@@ -137,17 +125,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const allUsers = [...bots, currentUserEntry];
-    
-    // Sort descending
     allUsers.sort((a, b) => b.balance - a.balance);
-    
-    // Assign Ranks
     const ranked = allUsers.map((u, i) => ({ ...u, rank: i + 1 }));
     
     setLeaderboard(ranked);
   }, [state.balance, state.username, state.isOnboarded, bots]);
 
-  // Save User State loop & Passive Income & Energy Regen
+  // Game Loop (Passive Income & Save)
   useEffect(() => {
     if (!loaded || !state.isOnboarded) return;
 
@@ -164,13 +148,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastLogin: Date.now()
         };
         
+        // Auto-Save User
         try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                localStorage.setItem('furry_combat_save', JSON.stringify(newState));
-            }
-        } catch(e) {
-            // Ignore storage errors in loop
-        }
+            localStorage.setItem('furry_combat_save', JSON.stringify(newState));
+        } catch {}
+
         return newState;
       });
     }, 1000);
@@ -179,23 +161,26 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [loaded, state.isOnboarded]);
 
   const registerUser = (name: string) => {
-    setState(prev => ({
-      ...prev,
+    const newState = {
+      ...state,
       username: name,
       isOnboarded: true
-    }));
+    };
+    setState(newState);
+    try {
+        localStorage.setItem('furry_combat_save', JSON.stringify(newState));
+    } catch {}
   };
 
   const handleTap = (amount: number) => {
     if (state.energy < amount) return false;
     setState(prev => {
-        // Check level up logic
-        let currentLevelNameIdx = 0;
+        // Recalculate level
+        let level = 1;
         const newBalance = prev.balance + amount;
-        
         for(let i=0; i<LEVEL_THRESHOLDS.length; i++) {
             if (newBalance >= LEVEL_THRESHOLDS[i].threshold) {
-                currentLevelNameIdx = i;
+                level = i + 1;
             }
         }
 
@@ -203,14 +188,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...prev,
             balance: newBalance,
             energy: prev.energy - amount,
-            level: currentLevelNameIdx + 1
+            level: level
         };
     });
     return true;
   };
 
   const calculateUpgradeCost = (basePrice: number, level: number) => {
-    return Math.floor(basePrice * Math.pow(1.2, level));
+    return Math.floor(basePrice * Math.pow(1.25, level)); // Increased scaling slightly
   };
 
   const buyUpgrade = (upgrade: UpgradeItem) => {
@@ -253,18 +238,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const connectWallet = () => {
-    setState(prev => ({ ...prev, walletConnected: true }));
+    setState(prev => {
+        const newState = { ...prev, walletConnected: true };
+        localStorage.setItem('furry_combat_save', JSON.stringify(newState));
+        return newState;
+    });
   };
 
-  // RENDER LOADING SCREEN INSTEAD OF NULL
+  // If loading takes too long, render a blank screen (black) to avoid FOUC
   if (!loaded) {
-      return (
-        <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white space-y-4">
-            {/* CSS Only Spinner to avoid dependency crashes */}
-            <div className="w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
-            <p className="font-mono animate-pulse text-sm text-gray-400">Загрузка данных...</p>
-        </div>
-      );
+      return <div className="h-screen w-full bg-black" />;
   }
 
   return (

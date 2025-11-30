@@ -8,61 +8,52 @@ import Mine from './screens/Mine';
 import Leaderboard from './screens/Leaderboard';
 import Airdrop from './screens/Airdrop';
 
-// ERROR BOUNDARY COMPONENT
-interface Props {
-  children?: ReactNode;
-}
-interface State {
-  hasError: boolean;
-  error: Error | null;
-}
+// --- Error Boundary ---
+interface Props { children?: ReactNode; }
+interface State { hasError: boolean; error: Error | null; }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null
-  };
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
 
-  public static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("App Crash:", error, errorInfo);
   }
 
-  public render() {
+  render() {
     if (this.state.hasError) {
       return (
         <div className="h-screen w-full bg-black text-white flex flex-col items-center justify-center p-6 text-center">
-          <h1 className="text-2xl font-bold text-red-500 mb-4">Что-то пошло не так</h1>
-          <p className="text-gray-400 mb-6 text-sm bg-gray-900 p-4 rounded-lg overflow-auto max-w-full">
-            {this.state.error?.message || "Unknown Error"}
-          </p>
+          <h2 className="text-xl font-bold text-red-500 mb-2">Ошибка приложения</h2>
           <button 
-            onClick={() => {
-                localStorage.clear();
-                window.location.reload();
-            }}
-            className="bg-yellow-400 text-black font-bold py-3 px-6 rounded-xl hover:bg-yellow-300"
+            onClick={() => { localStorage.clear(); window.location.reload(); }}
+            className="bg-yellow-400 text-black font-bold py-2 px-6 rounded-lg"
           >
-            Сбросить данные и перезагрузить
+            Сброс данных
           </button>
         </div>
       );
     }
-
     return this.props.children;
   }
 }
 
+// --- Main Content ---
 const GameContent: React.FC = () => {
   const { state, activeTab } = useGame();
 
+  // If not onboarded, show Onboarding screen (no nav)
   if (!state.isOnboarded) {
     return <Onboarding />;
   }
 
+  // Active Screen Renderer
   const renderScreen = () => {
     switch (activeTab) {
       case Tab.EXCHANGE: return <Exchange />;
@@ -74,14 +65,10 @@ const GameContent: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-full bg-black text-white relative overflow-hidden flex flex-col font-sans">
-        
-        {/* Main Content Area */}
-        <main className="flex-1 w-full max-w-md mx-auto relative z-10 bg-black h-full overflow-hidden">
+    <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden relative font-sans">
+        <main className="flex-1 w-full max-w-md mx-auto relative z-10 h-full overflow-hidden">
             {renderScreen()}
         </main>
-
-        {/* Navigation */}
         <div className="max-w-md mx-auto w-full relative z-20">
             <TabNavigation />
         </div>
@@ -89,6 +76,7 @@ const GameContent: React.FC = () => {
   );
 };
 
+// --- App Root ---
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
