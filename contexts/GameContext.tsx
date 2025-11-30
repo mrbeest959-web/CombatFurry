@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserState, UpgradeItem, SkinItem, Tab, LeaderboardUser } from '../types';
 import { UPGRADES, SKINS, LEVEL_THRESHOLDS, INITIAL_LEADERBOARD_BOTS } from '../constants';
-import { Loader2 } from 'lucide-react';
+// Removed Loader2 import to prevent crash if icon lib fails to load initially
 
 const INITIAL_STATE: UserState = {
   username: '',
@@ -41,47 +41,60 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // Load from local storage with Error Handling
+  // Load from local storage with Robust Error Handling
   useEffect(() => {
     const initGame = async () => {
         try {
-            // Load User
-            const saved = localStorage.getItem('furry_combat_save');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                
-                // Calculate offline earnings
-                const now = Date.now();
-                const secondsPassed = (now - parsed.lastLogin) / 1000;
-                const offlineEarnings = Math.floor((parsed.profitPerHour / 3600) * secondsPassed);
-                
-                // Energy Recovery
-                const energyRecovery = Math.floor(secondsPassed * 4);
-                const newEnergy = Math.min(parsed.maxEnergy, parsed.energy + energyRecovery);
+            // Check if storage is available
+            const storageAvailable = typeof window !== 'undefined' && window.localStorage;
+            
+            if (storageAvailable) {
+                // Load User
+                const saved = localStorage.getItem('furry_combat_save');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        
+                        // Calculate offline earnings
+                        const now = Date.now();
+                        const secondsPassed = (now - (parsed.lastLogin || now)) / 1000;
+                        const offlineEarnings = Math.floor((parsed.profitPerHour / 3600) * secondsPassed);
+                        
+                        // Energy Recovery
+                        const energyRecovery = Math.floor(secondsPassed * 4);
+                        const newEnergy = Math.min(parsed.maxEnergy, parsed.energy + energyRecovery);
 
-                setState({
-                ...parsed,
-                balance: parsed.balance + offlineEarnings,
-                energy: newEnergy,
-                lastLogin: now,
-                walletConnected: parsed.walletConnected || false 
-                });
+                        setState({
+                            ...parsed,
+                            balance: parsed.balance + (Number.isNaN(offlineEarnings) ? 0 : offlineEarnings),
+                            energy: Number.isNaN(newEnergy) ? 2000 : newEnergy,
+                            lastLogin: now,
+                            walletConnected: parsed.walletConnected || false 
+                        });
+                    } catch (parseError) {
+                        console.error("Error parsing save file, resetting:", parseError);
+                        // Optional: localStorage.removeItem('furry_combat_save');
+                    }
+                }
+
+                // Load Leaderboard DB (Bots)
+                const savedBots = localStorage.getItem('furry_combat_bots');
+                if (savedBots) {
+                    try {
+                        setBots(JSON.parse(savedBots));
+                    } catch (e) { console.error("Error parsing bots", e); }
+                }
             }
-
-            // Load Leaderboard DB (Bots)
-            const savedBots = localStorage.getItem('furry_combat_bots');
-            if (savedBots) {
-                setBots(JSON.parse(savedBots));
-            }
-
         } catch (e) {
-            console.error("Save file corrupted or storage disabled", e);
+            console.error("Critical storage error:", e);
         } finally {
+            // Always set loaded to true so the app starts even if storage fails
             setLoaded(true);
         }
     };
     
-    initGame();
+    // Small timeout to ensure DOM is ready and prevent race conditions
+    setTimeout(initGame, 100);
   }, []);
 
   // Simulate Live Leaderboard (Bots gaining score) & Persist to DB
@@ -97,9 +110,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // Save to "Database" (LocalStorage)
             try {
-                localStorage.setItem('furry_combat_bots', JSON.stringify(updatedBots));
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    localStorage.setItem('furry_combat_bots', JSON.stringify(updatedBots));
+                }
             } catch (e) {
-                console.warn("Could not save leaderboard", e);
+                // Silent fail for storage quotas
             }
             
             return updatedBots;
@@ -150,9 +165,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         
         try {
-            localStorage.setItem('furry_combat_save', JSON.stringify(newState));
+            if (typeof window !== 'undefined' && window.localStorage) {
+                localStorage.setItem('furry_combat_save', JSON.stringify(newState));
+            }
         } catch(e) {
-            console.warn("Could not save game state", e);
+            // Ignore storage errors in loop
         }
         return newState;
       });
@@ -243,8 +260,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   if (!loaded) {
       return (
         <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white space-y-4">
-            <Loader2 size={48} className="animate-spin text-yellow-400" />
-            <p className="font-mono animate-pulse">Загрузка данных...</p>
+            {/* CSS Only Spinner to avoid dependency crashes */}
+            <div className="w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+            <p className="font-mono animate-pulse text-sm text-gray-400">Загрузка данных...</p>
         </div>
       );
   }
